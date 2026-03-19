@@ -4,30 +4,21 @@ package main
 import "testing"
 
 func TestDebug(t *testing.T) {
-	nums := []int{4, 5, 6, 7, 0, 1, 2}
-	target := 0
-	got := search(nums, target)
+	heights := []int{2, 1, 5, 6, 2, 3}
+	got := largestRectangleArea(heights)
 	t.Logf("got = %#v", got)
 	t.Log("Edit this test case first when debugging.")
 }
 
 func TestSamples(t *testing.T) {
 	t.Run("sample_1", func(t *testing.T) {
-		nums := []int{4, 5, 6, 7, 0, 1, 2}
-		target := 0
-		got := search(nums, target)
+		heights := []int{2, 1, 5, 6, 2, 3}
+		got := largestRectangleArea(heights)
 		t.Logf("got = %#v", got)
 	})
 	t.Run("sample_2", func(t *testing.T) {
-		nums := []int{4, 5, 6, 7, 0, 1, 2}
-		target := 3
-		got := search(nums, target)
-		t.Logf("got = %#v", got)
-	})
-	t.Run("sample_3", func(t *testing.T) {
-		nums := []int{1}
-		target := 0
-		got := search(nums, target)
+		heights := []int{2, 4}
+		got := largestRectangleArea(heights)
 		t.Logf("got = %#v", got)
 	})
 }

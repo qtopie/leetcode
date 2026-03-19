@@ -20,30 +20,24 @@ func buildListNode(values []int) *ListNode {
 }
 
 func TestDebug(t *testing.T) {
-	l1 := buildListNode([]int{2, 4, 3})
-	l2 := buildListNode([]int{5, 6, 4})
-	got := addTwoNumbers(l1, l2)
+	head := buildListNode([]int{1, 4, 3, 2, 5, 2})
+	x := 3
+	got := partition(head, x)
 	t.Logf("got = %#v", got)
 	t.Log("Edit this test case first when debugging.")
 }
 
 func TestSamples(t *testing.T) {
 	t.Run("sample_1", func(t *testing.T) {
-		l1 := buildListNode([]int{2, 4, 3})
-		l2 := buildListNode([]int{5, 6, 4})
-		got := addTwoNumbers(l1, l2)
+		head := buildListNode([]int{1, 4, 3, 2, 5, 2})
+		x := 3
+		got := partition(head, x)
 		t.Logf("got = %#v", got)
 	})
 	t.Run("sample_2", func(t *testing.T) {
-		l1 := buildListNode([]int{0})
-		l2 := buildListNode([]int{0})
-		got := addTwoNumbers(l1, l2)
-		t.Logf("got = %#v", got)
-	})
-	t.Run("sample_3", func(t *testing.T) {
-		l1 := buildListNode([]int{9, 9, 9, 9, 9, 9, 9})
-		l2 := buildListNode([]int{9, 9, 9, 9})
-		got := addTwoNumbers(l1, l2)
+		head := buildListNode([]int{2, 1})
+		x := 2
+		got := partition(head, x)
 		t.Logf("got = %#v", got)
 	})
 }
