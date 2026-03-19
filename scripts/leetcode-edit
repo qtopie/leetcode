@@ -1,0 +1,283 @@
+#!/bin/bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: leetcode-edit <id> [extra leetcode edit args]" >&2
+  exit 1
+fi
+
+id="$1"
+shift || true
+
+conf="${HOME}/.leetcode/leetcode.toml"
+
+expand_home() {
+  local value="$1"
+  printf '%s\n' "${value/#\~/$HOME}"
+}
+
+read_toml_value() {
+  local section="$1"
+  local key="$2"
+  awk -F'"' -v target_section="$section" -v target_key="$key" '
+    /^\[/ { in_section = ($0 == "[" target_section "]"); next }
+    in_section && $1 ~ "^[[:space:]]*" target_key "[[:space:]]*=[[:space:]]*$" { print $2; exit }
+  ' "$conf"
+}
+
+resolve_dlv_bin() {
+  if [[ -n "${DLV_BIN:-}" ]]; then
+    printf '%s\n' "$DLV_BIN"
+    return
+  fi
+
+  if command -v dlv >/dev/null 2>&1; then
+    command -v dlv
+    return
+  fi
+
+  printf '%s\n' "$HOME/go/bin/dlv"
+}
+
+normalize_go_file() {
+  local file="$1"
+  local tmp_file
+  local first_line
+
+  if [[ ! -f "${file}" ]]; then
+    return
+  fi
+
+  if ! grep -q '^package ' "${file}"; then
+    tmp_file="$(mktemp)"
+    {
+      printf 'package main\n\n'
+      cat "${file}"
+    } > "${tmp_file}"
+    mv "${tmp_file}" "${file}"
+    return
+  fi
+
+  first_line="$(head -n 1 "${file}" || true)"
+  if [[ "${first_line}" == package\ * ]]; then
+    return
+  fi
+
+  tmp_file="$(mktemp)"
+  awk '
+    BEGIN {
+      package_line = ""
+      line_count = 0
+    }
+    /^package / && package_line == "" {
+      package_line = $0
+      next
+    }
+    {
+      lines[++line_count] = $0
+    }
+    END {
+      if (package_line == "") {
+        package_line = "package main"
+      }
+      print package_line
+      print ""
+      for (i = 1; i <= line_count; i++) {
+        print lines[i]
+      }
+    }
+  ' "${file}" > "${tmp_file}"
+  mv "${tmp_file}" "${file}"
+}
+
+run_native_generate() {
+  local backup_conf
+  local tmp_conf
+
+  backup_conf="$(mktemp)"
+  tmp_conf="$(mktemp)"
+  cp "${conf}" "${backup_conf}"
+
+  cleanup_generate_conf() {
+    if [[ -f "${backup_conf}" ]]; then
+      mv "${backup_conf}" "${conf}"
+    fi
+    rm -f "${tmp_conf}"
+  }
+
+  trap cleanup_generate_conf RETURN
+
+  awk '
+    /^\[/ {
+      in_code = ($0 == "[code]")
+    }
+    in_code && /^[[:space:]]*editor[[:space:]]*=/ {
+      print "editor = \"/usr/bin/true\""
+      next
+    }
+    {
+      print
+    }
+  ' "${conf}" > "${tmp_conf}"
+
+  mv "${tmp_conf}" "${conf}"
+  leetcode edit "${id}" "$@"
+}
+
+ensure_vimspector_config() {
+  local dir="$1"
+  local dlv_bin="$2"
+  local vimspector_file="${dir}/.vimspector.json"
+
+  if [[ -f "${vimspector_file}" ]]; then
+    return
+  fi
+
+  cat > "${vimspector_file}" <<EOF
+{
+  "adapters": {
+    "delve-local": {
+      "variables": {
+        "port": "\${unusedLocalPort}",
+        "listenOn": "127.0.0.1",
+        "dlvFlags": ""
+      },
+      "command": [
+        "${dlv_bin}",
+        "dap",
+        "--listen",
+        "\${listenOn}:\${port}",
+        "*\${dlvFlags}"
+      ],
+      "tty": true,
+      "port": "\${port}"
+    }
+  },
+  "configurations": {
+    "Debug TestDebug": {
+      "adapter": "delve-local",
+      "filetypes": [ "go" ],
+      "configuration": {
+        "request": "launch",
+        "mode": "test",
+        "program": "\${workspaceRoot}",
+        "dlvCwd": "\${workspaceRoot}",
+        "args": [ "-test.run", "TestDebug" ]
+      },
+      "breakpoints": {
+        "exception": {
+          "unrecovered-panic": "",
+          "runtime-fatal-throw": ""
+        }
+      }
+    },
+    "Debug Package": {
+      "adapter": "delve-local",
+      "filetypes": [ "go" ],
+      "configuration": {
+        "request": "launch",
+        "mode": "debug",
+        "program": "\${workspaceRoot}",
+        "dlvCwd": "\${workspaceRoot}"
+      },
+      "breakpoints": {
+        "exception": {
+          "unrecovered-panic": "",
+          "runtime-fatal-throw": ""
+        }
+      }
+    }
+  }
+}
+EOF
+}
+
+ensure_debug_test_file() {
+  local file="$1"
+
+  if [[ -f "${file}" ]]; then
+    return
+  fi
+
+cat > "${file}" <<'EOF'
+package main
+
+import "testing"
+
+// Update TestDebug to call the current solution, then press F5 in Vimspector.
+func TestDebug(t *testing.T) {
+	t.Skip("edit main_test.go with your sample input before debugging")
+}
+EOF
+}
+
+generate_go_tests() {
+  local dir="$1"
+  local generator="${code}/scripts/generate-go-tests.py"
+
+  if [[ -f "${generator}" && -f "${dir}/main.tests.dat" ]]; then
+    python3 "${generator}" "${dir}"
+    return
+  fi
+
+  ensure_debug_test_file "${dir}/main_test.go"
+}
+
+root_raw="$(read_toml_value storage root)"
+code_raw="$(read_toml_value storage code)"
+
+if [[ -z "${root_raw}" || -z "${code_raw}" ]]; then
+  echo "failed to read storage.root/storage.code from ${conf}" >&2
+  exit 1
+fi
+
+root="$(expand_home "$root_raw")"
+code="$(expand_home "$code_raw")"
+if [[ "${code}" != /* ]]; then
+  code="${root}/${code}"
+fi
+
+cache_db="${root}/Problems"
+if [[ ! -f "${cache_db}" ]]; then
+  leetcode data -u >/dev/null
+fi
+
+slug="$(sqlite3 "${cache_db}" "select slug from problems where fid = ${id} limit 1;" 2>/dev/null || true)"
+if [[ -z "${slug}" ]]; then
+  leetcode data -u >/dev/null
+  slug="$(sqlite3 "${cache_db}" "select slug from problems where fid = ${id} limit 1;")"
+fi
+
+if [[ -z "${slug}" ]]; then
+  echo "failed to resolve problem slug for id ${id}" >&2
+  exit 1
+fi
+
+dir="${code}/${id}.${slug}"
+mkdir -p "${dir}"
+dlv_bin="$(resolve_dlv_bin)"
+
+legacy_code="${code}/${id}.${slug}.go"
+legacy_tests="${code}/${id}.${slug}.tests.dat"
+target_code="${dir}/main.go"
+target_tests="${dir}/main.tests.dat"
+debug_test="${dir}/main_test.go"
+
+# migrate legacy files if present
+if [[ -f "${legacy_code}" && ! -f "${target_code}" ]]; then
+  mv "${legacy_code}" "${target_code}"
+fi
+
+if [[ -f "${legacy_tests}" && ! -f "${target_tests}" ]]; then
+  mv "${legacy_tests}" "${target_tests}"
+fi
+
+if [[ ! -f "${target_code}" ]]; then
+  run_native_generate "$@"
+fi
+
+normalize_go_file "${target_code}"
+ensure_vimspector_config "${dir}" "${dlv_bin}"
+generate_go_tests "${dir}"
+
+exec leetcode edit "${id}" "$@"
