@@ -1,3 +1,3 @@
-module github.com/qtopie/leetcode
+module example.com/m
 
-go 1.25.5
+go 1.22

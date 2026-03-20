@@ -1,0 +1,10 @@
+two sum: a+b = target
+solution: hashset
+
+three sum: a+b+c = 0
+solution: sort nums, target = -c, find l + r eq target
+
+4 sum: a+b+c+d = target, decrease and conquer
+solution: sort nums, b+c+d = newTarget = target - a
+find (b+c) + d = newTarget   b+c as l, d as r
+
