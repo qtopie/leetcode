@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	heights := []int{2, 1, 5, 6, 2, 3}
-	got := largestRectangleArea(heights)
+	n := 5
+	got := findIntegers(n)
 	fmt.Printf("got = %#v", got)
 }

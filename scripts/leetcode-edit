@@ -60,29 +60,19 @@ normalize_go_file() {
     return
   fi
 
-  first_line="$(head -n 1 "${file}" || true)"
-  if [[ "${first_line}" == package\ * ]]; then
-    return
-  fi
-
   tmp_file="$(mktemp)"
   awk '
     BEGIN {
-      package_line = ""
       line_count = 0
     }
-    /^package / && package_line == "" {
-      package_line = $0
+    /^package / {
       next
     }
     {
       lines[++line_count] = $0
     }
     END {
-      if (package_line == "") {
-        package_line = "package main"
-      }
-      print package_line
+      print "package main"
       print ""
       for (i = 1; i <= line_count; i++) {
         print lines[i]
@@ -131,7 +121,7 @@ ensure_vimspector_config() {
   local dlv_bin="$2"
   local vimspector_file="${dir}/.vimspector.json"
 
-  if [[ -f "${vimspector_file}" ]]; then
+  if [[ -f "${vimspector_file}" ]] && grep -A 10 "TestDebug" "${vimspector_file}" | grep -q "\-test.run"; then
     return
   fi
 
@@ -156,7 +146,7 @@ ensure_vimspector_config() {
     }
   },
   "configurations": {
-    "Debug TestDebug": {
+    "TestDebug": {
       "adapter": "delve-local",
       "filetypes": [ "go" ],
       "configuration": {
@@ -166,49 +156,20 @@ ensure_vimspector_config() {
         "dlvCwd": "\${workspaceRoot}",
         "args": [ "-test.run", "TestDebug" ]
       },
-      "breakpoints": {
-        "exception": {
-          "unrecovered-panic": "",
-          "runtime-fatal-throw": ""
-        }
-      }
+      "default": true
     },
-    "Debug Package": {
+    "Debug solution_test.go": {
       "adapter": "delve-local",
       "filetypes": [ "go" ],
       "configuration": {
         "request": "launch",
-        "mode": "debug",
+        "mode": "test",
         "program": "\${workspaceRoot}",
-        "dlvCwd": "\${workspaceRoot}"
-      },
-      "breakpoints": {
-        "exception": {
-          "unrecovered-panic": "",
-          "runtime-fatal-throw": ""
-        }
+        "dlvCwd": "\${workspaceRoot}",
+        "args": [ "-test.run", "TestSamples" ]
       }
     }
   }
-}
-EOF
-}
-
-ensure_debug_test_file() {
-  local file="$1"
-
-  if [[ -f "${file}" ]]; then
-    return
-  fi
-
-cat > "${file}" <<'EOF'
-package main
-
-import "testing"
-
-// Update TestDebug to call the current solution, then press F5 in Vimspector.
-func TestDebug(t *testing.T) {
-	t.Skip("edit main_test.go with your sample input before debugging")
 }
 EOF
 }
@@ -221,8 +182,6 @@ generate_go_tests() {
     python3 "${generator}" "${dir}"
     return
   fi
-
-  ensure_debug_test_file "${dir}/main_test.go"
 }
 
 root_raw="$(read_toml_value storage root)"
@@ -261,9 +220,8 @@ dlv_bin="$(resolve_dlv_bin)"
 
 legacy_code="${code}/${id}.${slug}.go"
 legacy_tests="${code}/${id}.${slug}.tests.dat"
-target_code="${dir}/main.go"
+target_code="${dir}/solution.go"
 target_tests="${dir}/main.tests.dat"
-debug_test="${dir}/main_test.go"
 
 # migrate legacy files if present
 if [[ -f "${legacy_code}" && ! -f "${target_code}" ]]; then
@@ -276,6 +234,9 @@ fi
 
 if [[ ! -f "${target_code}" ]]; then
   run_native_generate "$@"
+  if [[ -f "${dir}/main.go" ]]; then
+      mv "${dir}/main.go" "${target_code}"
+  fi
 fi
 
 normalize_go_file "${target_code}"

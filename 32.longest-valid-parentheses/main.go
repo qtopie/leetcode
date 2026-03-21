@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	heights := []int{2, 1, 5, 6, 2, 3}
-	got := largestRectangleArea(heights)
+	s := "(()"
+	got := longestValidParentheses(s)
 	fmt.Printf("got = %#v", got)
 }

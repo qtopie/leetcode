@@ -197,7 +197,7 @@ func buildTreeNode(values []any) *TreeNode {
     return blocks
 
 
-def render_call(func_name: str, params, raw_case: list[str], return_type: str, suffix: str) -> str:
+def render_body(func_name: str, params, raw_case: list[str], return_type: str, log_func: str) -> str:
     names = []
     lines = []
     for (param_name, param_type), raw in zip(params, raw_case):
@@ -208,14 +208,46 @@ def render_call(func_name: str, params, raw_case: list[str], return_type: str, s
     call = f"{func_name}({', '.join(names)})"
     if return_type:
         lines.append(f"\tgot := {call}")
-        lines.append(f'\tt.Logf("got = %#v", got)')
+        lines.append(f'\t{log_func}("got = %#v", got)')
     else:
         lines.append(f"\t{call}")
-        lines.append(f'\tt.Log("function executed")')
+        lines.append(f'\t{log_func}("function executed")')
 
-    if suffix:
-        lines.append(f'\tt.Log({go_string(suffix)})')
     return "\n".join(lines)
+
+
+def render_main(main_go: Path, test_data: Path, target: Path):
+    func_name, params, return_type = parse_signature(main_go)
+
+    if func_name == "Constructor":
+        target.write_text(
+            f"{AUTO_MARKER}\npackage main\n\nimport \"fmt\"\n\nfunc main() {{\n\tfmt.Println(\"Design problem: manually test in main.go if needed\")\n}}\n"
+        )
+        return
+
+    cases = parse_cases(test_data, len(params))
+    param_types = {param_type for _, param_type in params}
+
+    sections = [
+        AUTO_MARKER,
+        "package main",
+        "",
+        'import "fmt"',
+        "",
+    ]
+
+    helpers = helper_blocks(param_types)
+    if helpers:
+        sections.append("\n\n".join(helpers))
+        sections.append("")
+
+    first_case = cases[0] if cases else []
+    sections.append("func main() {")
+    sections.append(render_body(func_name, params, first_case, return_type, "fmt.Printf"))
+    sections.append("}")
+
+    target.write_text("\n".join(sections))
+    subprocess.run(["gofmt", "-w", str(target)], check=True)
 
 
 def render_tests(main_go: Path, test_data: Path, target: Path):
@@ -245,7 +277,7 @@ def render_tests(main_go: Path, test_data: Path, target: Path):
 
     first_case = cases[0] if cases else []
     sections.append("func TestDebug(t *testing.T) {")
-    sections.append(render_call(func_name, params, first_case, return_type, "Edit this test case first when debugging."))
+    sections.append(render_body(func_name, params, first_case, return_type, "t.Logf"))
     sections.append("}")
     sections.append("")
 
@@ -255,7 +287,7 @@ def render_tests(main_go: Path, test_data: Path, target: Path):
     else:
         for index, raw_case in enumerate(cases, start=1):
             sections.append(f'\tt.Run("sample_{index}", func(t *testing.T) {{')
-            body = render_call(func_name, params, raw_case, return_type, "")
+            body = render_body(func_name, params, raw_case, return_type, "t.Logf")
             sections.append("\n".join(f"\t{line}" if line else "" for line in body.splitlines()))
             sections.append("\t})")
     sections.append("}")
@@ -277,19 +309,21 @@ def main():
         raise SystemExit("usage: generate-go-tests.py <problem-dir>")
 
     problem_dir = Path(sys.argv[1]).resolve()
-    main_go = problem_dir / "main.go"
+    solution_go = problem_dir / "solution.go"
     test_data = problem_dir / "main.tests.dat"
-    target = problem_dir / "main_test.go"
+    main_go = problem_dir / "main.go"
+    test_go = problem_dir / "solution_test.go"
 
-    if not main_go.exists() or not test_data.exists():
-        raise SystemExit(f"missing main.go or main.tests.dat in {problem_dir}")
+    if not solution_go.exists() or not test_data.exists():
+        raise SystemExit(f"missing solution.go or main.tests.dat in {problem_dir}")
 
-    if not should_overwrite(target):
-        print(f"skip existing custom test file: {target}")
-        return
+    if should_overwrite(main_go):
+        render_main(solution_go, test_data, main_go)
+        print(f"generated {main_go}")
 
-    render_tests(main_go, test_data, target)
-    print(f"generated {target}")
+    if should_overwrite(test_go):
+        render_tests(solution_go, test_data, test_go)
+        print(f"generated {test_go}")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,8 @@ package main
 import "fmt"
 
 func main() {
-	heights := []int{2, 1, 5, 6, 2, 3}
-	got := largestRectangleArea(heights)
+	aliceSizes := []int{1, 1}
+	bobSizes := []int{2, 2}
+	got := fairCandySwap(aliceSizes, bobSizes)
 	fmt.Printf("got = %#v", got)
 }

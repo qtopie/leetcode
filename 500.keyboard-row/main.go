@@ -4,7 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	heights := []int{2, 1, 5, 6, 2, 3}
-	got := largestRectangleArea(heights)
+	words := []string{"Hello", "Alaska", "Dad", "Peace"}
+	got := findWords(words)
 	fmt.Printf("got = %#v", got)
 }
