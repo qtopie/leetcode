@@ -220,6 +220,13 @@ def render_call(func_name: str, params, raw_case: list[str], return_type: str, s
 
 def render_tests(main_go: Path, test_data: Path, target: Path):
     func_name, params, return_type = parse_signature(main_go)
+
+    if func_name == "Constructor":
+        target.write_text(
+            f"{AUTO_MARKER}\npackage main\n\nimport \"testing\"\n\nfunc TestDebug(t *testing.T) {{\n\t{PLACEHOLDER_SKIP}\n}}\n\nfunc TestSamples(t *testing.T) {{\n\t{PLACEHOLDER_SKIP}\n}}\n"
+        )
+        return
+
     cases = parse_cases(test_data, len(params))
     param_types = {param_type for _, param_type in params}
 

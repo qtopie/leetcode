@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+export PATH=$PATH:$HOME/.cargo/bin
+
 if [[ $# -lt 1 ]]; then
   echo "usage: leetcode-edit <id> [extra leetcode edit args]" >&2
   exit 1
@@ -36,7 +38,7 @@ resolve_dlv_bin() {
     return
   fi
 
-  printf '%s\n' "$HOME/go/bin/dlv"
+  printf '%s\n' "$GOPATH/bin/dlv"
 }
 
 normalize_go_file() {
