@@ -282,4 +282,6 @@ normalize_go_file "${target_code}"
 ensure_vimspector_config "${dir}" "${dlv_bin}"
 generate_go_tests "${dir}"
 
-exec leetcode edit "${id}" "$@"
+# cd into the problem directory so that the editor starts there.
+cd "${dir}"
+exec vim main.go
