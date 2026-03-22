@@ -24,7 +24,6 @@ func TestDebug(t *testing.T) {
 	l2 := buildListNode([]int{5, 6, 4})
 	got := addTwoNumbers(l1, l2)
 	t.Logf("got = %#v", got)
-	t.Log("Edit this test case first when debugging.")
 }
 
 func TestSamples(t *testing.T) {

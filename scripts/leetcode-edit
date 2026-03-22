@@ -178,7 +178,7 @@ generate_go_tests() {
   local dir="$1"
   local generator="${code}/scripts/generate-go-tests.py"
 
-  if [[ -f "${generator}" && -f "${dir}/main.tests.dat" ]]; then
+  if [[ -f "${generator}" && -f "${dir}/solution.tests.dat" ]]; then
     python3 "${generator}" "${dir}"
     return
   fi
@@ -221,7 +221,7 @@ dlv_bin="$(resolve_dlv_bin)"
 legacy_code="${code}/${id}.${slug}.go"
 legacy_tests="${code}/${id}.${slug}.tests.dat"
 target_code="${dir}/solution.go"
-target_tests="${dir}/main.tests.dat"
+target_tests="${dir}/solution.tests.dat"
 
 # migrate legacy files if present
 if [[ -f "${legacy_code}" && ! -f "${target_code}" ]]; then
@@ -245,4 +245,4 @@ generate_go_tests "${dir}"
 
 # cd into the problem directory so that the editor starts there.
 cd "${dir}"
-exec vim main.go
+exec vim solution.go

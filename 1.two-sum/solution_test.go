@@ -8,7 +8,6 @@ func TestDebug(t *testing.T) {
 	target := 9
 	got := twoSum(nums, target)
 	t.Logf("got = %#v", got)
-	t.Log("Edit this test case first when debugging.")
 }
 
 func TestSamples(t *testing.T) {

@@ -4,8 +4,7 @@ package main
 import "fmt"
 
 func main() {
-	nums := []int{2, 7, 11, 15}
-	target := 9
-	got := twoSum(nums, target)
-	fmt.Printf("got = %#v", got)
+	nums := []int{0, 1, 0, 3, 12}
+	moveZeroes(nums)
+	fmt.Printf("function executed")
 }

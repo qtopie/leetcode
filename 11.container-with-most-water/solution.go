@@ -1,4 +1,4 @@
-package leetcode
+package main
 
 // 双指针, 面积等于边界最小高度乘以长度，复合子问题(但非最优)
 func maxArea(height []int) int {
