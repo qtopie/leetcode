@@ -237,6 +237,9 @@ if [[ ! -f "${target_code}" ]]; then
   if [[ -f "${dir}/main.go" ]]; then
       mv "${dir}/main.go" "${target_code}"
   fi
+  if [[ -f "${dir}/main.tests.dat" ]]; then
+      mv "${dir}/main.tests.dat" "${target_tests}"
+  fi
 fi
 
 normalize_go_file "${target_code}"
