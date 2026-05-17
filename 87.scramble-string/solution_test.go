@@ -4,25 +4,29 @@ package main
 import "testing"
 
 func TestDebug(t *testing.T) {
-	lists := []*ListNode{buildListNode([]int{1, 4, 5}), buildListNode([]int{1, 3, 4}), buildListNode([]int{2, 6})}
-	got := mergeKLists(lists)
+	s1 := "great"
+	s2 := "rgeat"
+	got := isScramble(s1, s2)
 	t.Logf("got = %#v", got)
 }
 
 func TestSamples(t *testing.T) {
 	t.Run("sample_1", func(t *testing.T) {
-		lists := []*ListNode{buildListNode([]int{1, 4, 5}), buildListNode([]int{1, 3, 4}), buildListNode([]int{2, 6})}
-		got := mergeKLists(lists)
+		s1 := "great"
+		s2 := "rgeat"
+		got := isScramble(s1, s2)
 		t.Logf("got = %#v", got)
 	})
 	t.Run("sample_2", func(t *testing.T) {
-		lists := []*ListNode{}
-		got := mergeKLists(lists)
+		s1 := "abcde"
+		s2 := "caebd"
+		got := isScramble(s1, s2)
 		t.Logf("got = %#v", got)
 	})
 	t.Run("sample_3", func(t *testing.T) {
-		lists := []*ListNode{buildListNode([]int{})}
-		got := mergeKLists(lists)
+		s1 := "a"
+		s2 := "a"
+		got := isScramble(s1, s2)
 		t.Logf("got = %#v", got)
 	})
 }

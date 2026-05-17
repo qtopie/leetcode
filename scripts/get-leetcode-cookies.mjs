@@ -185,16 +185,17 @@ function upsertCookiesKeys(sectionBody, keyValues) {
 
 function replaceCookiesSection(existingToml, payload) {
   const keyValues = buildCookiesKeyValues(payload);
-  const cookiesSectionRegex = /(^\[cookies\][^\n]*\n?)([\s\S]*?)(?=^\[[^\]]+\][^\n]*\n?|\s*$)/m;
-  const matchedSection = existingToml.match(cookiesSectionRegex);
+  const cookiesSectionRegex = /((?:^|\n)\[cookies\][^\n]*\n?)([\s\S]*?)(?=\n\s*\[|$)/;
+  const match = existingToml.match(cookiesSectionRegex);
 
-  if (matchedSection) {
-    const header = matchedSection[1].endsWith("\n")
-      ? matchedSection[1]
-      : `${matchedSection[1]}\n`;
-    const updatedBody = upsertCookiesKeys(matchedSection[2], keyValues);
+  if (match) {
+    const fullMatch = match[0];
+    const header = match[1];
+    const body = match[2];
+
+    const updatedBody = upsertCookiesKeys(body, keyValues);
     const replacement = `${header}${updatedBody}\n`;
-    return existingToml.replace(cookiesSectionRegex, replacement);
+    return existingToml.replace(fullMatch, replacement);
   }
 
   const appendedSection = `${buildTomlSnippet(payload)}\n`;
@@ -258,9 +259,15 @@ async function main() {
   }
 
   console.log(`Opening ${siteConfig.login}`);
-  await page.goto(siteConfig.login, { waitUntil: "domcontentloaded" });
+  await page.goto(siteConfig.login, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
   await promptForLogin(args.site);
-  await page.goto(siteConfig.home, { waitUntil: "networkidle" });
+  await page.goto(siteConfig.home, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
 
   const { cookies, csrf, session } = await waitForRequiredCookies(
     context,
