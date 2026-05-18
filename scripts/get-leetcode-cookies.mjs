@@ -223,16 +223,10 @@ async function updateLeetCodeToml(payload) {
 }
 
 async function connectOrLaunchBrowser() {
-  try {
-    const connectedBrowser = await chromium.connectOverCDP(CDP_ENDPOINT);
-    const existingContext = connectedBrowser.contexts()[0];
-    const context = existingContext ?? (await connectedBrowser.newContext());
-    return { browser: connectedBrowser, context, reusedDebugBrowser: true };
-  } catch {
-    const launchedBrowser = await chromium.launch({ headless: false });
-    const context = await launchedBrowser.newContext();
-    return { browser: launchedBrowser, context, reusedDebugBrowser: false };
-  }
+  // Launch a new browser instance. We avoid headless mode so the user can interact.
+  const browser = await chromium.launch({ headless: false });
+  const context = await browser.newContext();
+  return { browser, context, reusedDebugBrowser: false };
 }
 
 async function main() {
@@ -247,27 +241,26 @@ async function main() {
     throw new Error(`unsupported site: ${args.site}`);
   }
 
+  const settingsUrl = args.site === "leetcode.com" 
+    ? "https://leetcode.com/settings/" 
+    : "https://leetcode.cn/settings/";
+
   await mkdir(path.dirname(args.output), { recursive: true });
 
-  const { browser, context, reusedDebugBrowser } = await connectOrLaunchBrowser();
+  const { browser, context } = await connectOrLaunchBrowser();
   const page = await context.newPage();
 
-  if (reusedDebugBrowser) {
-    console.log(`Connected to existing Chrome debug instance at ${CDP_ENDPOINT}`);
-  } else {
-    console.log("No Chrome debug instance on port 9222; launched a new browser.");
-  }
+  console.log(`Opening browser to ${settingsUrl}`);
+  console.log("Please log in if necessary. The script will wait for cookies to be captured.");
+  
+  await page.goto(settingsUrl, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
 
-  console.log(`Opening ${siteConfig.login}`);
-  await page.goto(siteConfig.login, {
-    waitUntil: "domcontentloaded",
-    timeout: 60_000,
-  });
-  await promptForLogin(args.site);
-  await page.goto(siteConfig.home, {
-    waitUntil: "domcontentloaded",
-    timeout: 60_000,
-  });
+  // Small prompt for clarity in the terminal
+  console.log("\x1b[33m%s\x1b[0m", ">>> ACTION REQUIRED: Log in to LeetCode in the opened browser window.");
+  console.log("The script will automatically detect once you are logged in.");
 
   const { cookies, csrf, session } = await waitForRequiredCookies(
     context,
@@ -308,11 +301,7 @@ async function main() {
   console.log(`Saved cookies to ${args.output}`);
   console.log(`Saved LeetCode config to ${LEETCODE_TOML_PATH}`);
 
-  if (reusedDebugBrowser) {
-    await page.close();
-  } else {
-    await browser.close();
-  }
+  await browser.close();
 }
 
 main().catch(async (error) => {
