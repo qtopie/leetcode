@@ -19,6 +19,8 @@
 12. [位运算核心技巧与 API (Bit Manipulation)](#12-位运算核心技巧与-api-bit-manipulation)
 13. [常用数学与算法技巧 (Math & Algo Tricks)](#13-常用数学与算法技巧-math--algo-tricks)
 14. [刷题必背避坑清单 (Gotchas)](#14-刷题必背避坑清单-gotchas)
+15. [Java 17 HTTP Client + Gson 解析 JSON](#15-java-17-http-client--gson-解析-json)
+16. [Gson 字段映射：`@SerializedName` 与全局命名策略](#16-gson-字段映射serializedname-与全局命名策略)
 
 ---
 
@@ -519,4 +521,258 @@ int gcd(int a, int b) {
    - 自定义 Comparator 用 `Integer.compare(a, b)` 替代 `a - b`。
 6. **字符串频繁拼接与修改**：
    - 不要在循环里用 `s += "a"`（每次创建新 String，复杂度飙升至 $O(n^2)$），请用 `StringBuilder`。
+
+---
+
+## 15. Java 17 HTTP Client + Gson 解析 JSON
+
+> 适用场景：用 Java 17 内置 `java.net.http.HttpClient` 发请求，再用 **Gson** 把 JSON 响应解析成 Java 对象（POJO / List）。
+> 这里只保留**最简单、同步（`send`）**的写法，不涉及异步。
+
+### 准备工作：添加 Gson 依赖
+
+Maven 在 `pom.xml` 中添加：
+
+```xml
+<dependency>
+    <groupId>com.google.code.gson</groupId>
+    <artifactId>gson</artifactId>
+    <version>2.11.0</version> <!-- 请根据实际情况使用最新版本 -->
+</dependency>
+```
+
+### 方法 1：手动解析（最直观，适合小数据量）
+
+先让 HTTP Client 把响应体接收为 `String`，再 `gson.fromJson()` 转成 POJO。
+
+```java
+import com.google.code.gson.Gson;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class GsonManualExample {
+    // 1. 定义 POJO 匹配 JSON
+    public static class Post {
+        int id;
+        int userId;
+        String title;
+        String body;
+    }
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        Gson gson = new Gson();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://typicode.com"))
+                .GET()
+                .build();
+
+        // 2. 响应体作为字符串接收
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // 3. 用 Gson 解析成对象
+        Post post = gson.fromJson(response.body(), Post.class);
+
+        System.out.println("文章标题: " + post.title);
+        System.out.println("文章内容: " + post.body);
+    }
+}
+```
+
+### 方法 2：自定义 BodyHandler（最高效，适合大数据量）
+
+JSON 很大时，先变成整个 `String` 很费内存。用 `BodyHandlers.ofInputStream()` 拿到流，让 Gson 直接从流边下载边解析，封装成通用工具方法：
+
+```java
+import com.google.code.gson.Gson;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class GsonStreamExample {
+
+    public static class Post {
+        int id;
+        String title;
+    }
+
+    // 泛型工具方法：直接将 HTTP 响应流解析为指定 Java 对象
+    public static <T> HttpResponse.BodyHandler<T> asJson(Class<T> targetClass) {
+        Gson gson = new Gson();
+        return responseInfo -> HttpResponse.BodySubscribers.mapping(
+                HttpResponse.BodySubscribers.ofInputStream(),
+                (InputStream stream) -> {
+                    try (Reader reader = new InputStreamReader(stream)) {
+                        return gson.fromJson(reader, targetClass);
+                    } catch (Exception e) {
+                        throw new RuntimeException("JSON 解析失败", e);
+                    }
+                }
+        );
+    }
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://typicode.com"))
+                .GET()
+                .build();
+
+        // 直接传入自定义 BodyHandler
+        HttpResponse<Post> response = client.send(request, asJson(Post.class));
+
+        // response.body() 已经是解析好的 Post 对象
+        Post post = response.body();
+        System.out.println("直接拿到的对象标题: " + post.title);
+    }
+}
+```
+
+### 解析数组 / 列表（List）—— 用 TypeToken
+
+`List<T>` 有泛型擦除，`gson.fromJson(str, List.class)` 只能得到 `List<Map>`，必须用 `TypeToken` 保留泛型类型：
+
+```java
+import com.google.code.gson.Gson;
+import com.google.code.gson.reflect.TypeToken;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.List;
+
+public class GsonListExample {
+
+    public static class Post {
+        int id;
+        String title;
+    }
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        Gson gson = new Gson();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://typicode.com"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // 关键：用 TypeToken 保留 List<Post> 的泛型信息
+        List<Post> posts = gson.fromJson(
+                response.body(),
+                new TypeToken<List<Post>>() {}.getType()
+        );
+
+        for (Post p : posts) {
+            System.out.println("标题: " + p.title);
+        }
+    }
+}
+```
+
+> 💡 小结：单个对象用 `gson.fromJson(str, Post.class)`；`List<T>` 必须用 `new TypeToken<List<T>>() {}.getType()`。
+
+---
+
+## 16. Gson 字段映射：`@SerializedName` 与全局命名策略
+
+> 当 Java 属性名和 JSON 的 key 不一致（如 JSON 用下划线 `user_id`，Java 用驼峰 `userId`），或 key 含特殊字符时，用 `@SerializedName` 注解指定映射。
+> 它等价于 Jackson 的 `@JsonProperty`。
+
+### 1. 使用 `@SerializedName` 注解
+
+```java
+import com.google.code.gson.annotations.SerializedName;
+
+public class Post {
+    int id; // key 同名，无需注解
+
+    @SerializedName("user_id")          // JSON 下划线 -> Java 驼峰
+    int userId;
+
+    @SerializedName("article_title")    // JSON 键 -> Java 别名
+    String title;
+
+    // alternate：多个备用 key 任一匹配均可解析
+    @SerializedName(value = "body", alternate = {"content", "text"})
+    String body;
+}
+```
+
+加上注解后，HTTP Client 与 `TypeToken` 代码**完全不用改**，Gson 自动识别转换。
+
+### 2. 配合 HTTP Client + TypeToken 完整示例
+
+```java
+import com.google.code.gson.Gson;
+import com.google.code.gson.reflect.TypeToken;
+import com.google.code.gson.annotations.SerializedName;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.List;
+
+public class GsonFieldNameExample {
+
+    public static class Product {
+        int id;
+
+        @SerializedName("product_name") // JSON 里叫 product_name
+        String name;
+
+        @SerializedName("sale_price")    // JSON 里叫 sale_price
+        double price;
+    }
+
+    public static void main(String[] args) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        Gson gson = new Gson();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://example.com"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        // TypeToken 解析集合，Gson 自动处理 @SerializedName
+        List<Product> products = gson.fromJson(
+                response.body(),
+                new TypeToken<List<Product>>() {}.getType()
+        );
+
+        for (Product p : products) {
+            System.out.println("商品名称: " + p.name + ", 价格: " + p.price);
+        }
+    }
+}
+```
+
+### 3. 进阶：全局下划线转驼峰
+
+若整个 API 的 JSON 全是下划线命名（`create_time`、`user_status`），不想逐个加注解，可在构建 `Gson` 时设置全局策略：
+
+```java
+import com.google.code.gson.FieldNamingPolicy;
+import com.google.code.gson.Gson;
+import com.google.code.gson.GsonBuilder;
+
+// JSON 下划线会自动映射到 Java 驼峰（userId <- user_id）
+Gson gson = new GsonBuilder()
+        .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+        .create();
+```
+
+用了全局策略后，Java 属性写 `userId` 即可自动匹配 `user_id`，仅个别特殊字段才需单独加 `@SerializedName`。
 
